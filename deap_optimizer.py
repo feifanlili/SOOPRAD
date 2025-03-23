@@ -7,7 +7,7 @@ class GA_Optimizer:
     DEFAULT_PARAMS = {
         "N_bits": 10,          # Number of bits for binary encoding
         "N_pop": 40,           # Population size
-        "maxiter": 100,       # Max number of generations
+        "maxiter": 1000,       # Max number of generations
         "crossoverPB": 0.5,    # Crossover probability
         "mutationPB": 0.2,     # Mutation probability
         "stagnation_limit": 50,# Stop if no improvement for X generations
@@ -176,7 +176,7 @@ class GA_Optimizer:
         best_ind = tools.selBest(self.pop, 1)[0]
         best_ind_phy = self._binary_to_physical(best_ind)
         print(f"Best individual: {best_ind_phy}, Fitness: {best_ind.fitness.values}")
-        
+
         if plot_results:
             ax1.clear()
             ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm")  
