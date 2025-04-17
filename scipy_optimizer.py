@@ -1,14 +1,19 @@
+# ++++++++++ LOCAL IMPORTS ++++++++++++
+from optimizer import Optimizer
+
+# ++++++++++ PACKAGE IMPORTS ++++++++++
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import optimize
 
-class SciPyOptimizer:
+
+class SciPyOptimizer(Optimizer):
     DEFAULT_PARAMS = {
         "shgo": {
             "method": "shgo",
             "n": 100,
             "iters": 1,
-            "sampling_method": "simplicial"
+            "sampling_method": "simplicial",
         },
         "dual_annealing": {
             "method": "dual_annealing",
@@ -16,7 +21,7 @@ class SciPyOptimizer:
             "initial_temp": 5230.0,
             "visit": 2.62,
             "accept": -5.0,
-            "maxfun": 10000000
+            "maxfun": 10000000,
         },
         "differential_evolution": {
             "method": "differential_evolution",
@@ -25,23 +30,21 @@ class SciPyOptimizer:
             "popsize": 15,
             "tol": 0.01,
             "mutation": (0.5, 1),
-            "recombination": 0.7
-        }
+            "recombination": 0.7,
+        },
     }
 
     def __init__(self, objective_func, bounds, params=None):
         """
         SciPy-based global optimizer with flexible parameter settings.
-        
+
         Parameters:
         - objective_func: function to optimize.
         - bounds: list of tuples [(x_min, x_max), (y_min, y_max)].
         - params: dictionary with `method` and optimizer-specific parameters.
                   If `params` is None, it defaults to 'shgo'.
         """
-        self.objective_func = objective_func
-        self.bounds = bounds
-
+        super().__init__(objective_func, bounds)
         # Use default settings if params is None
         if params is None:
             self.params = self.DEFAULT_PARAMS["shgo"]  # Default to SHGO
@@ -49,15 +52,17 @@ class SciPyOptimizer:
             # Checks if "method" exists in the dictionary, if "method" exists, it returns its value.
             # If "method" does not exist, it returns "shgo" as the default value.
             method = params.get("method", "shgo")  # Default to SHGO if not specified
-            self.params = {**self.DEFAULT_PARAMS.get(method, {}), **params}  # Merge defaults
-        
+            self.params = {
+                **self.DEFAULT_PARAMS.get(method, {}),
+                **params,
+            }  # Merge defaults
+
         self.method = self.params["method"]
-        self.results = None  # Store optimization results
 
     def optimize(self):
         """
         Runs the selected optimization method with user-defined parameters.
-        
+
         Returns:
         - Optimization result object.
         """
@@ -65,19 +70,21 @@ class SciPyOptimizer:
         optimizers = {
             "shgo": optimize.shgo,
             "dual_annealing": optimize.dual_annealing,
-            "differential_evolution": optimize.differential_evolution
+            "differential_evolution": optimize.differential_evolution,
         }
         # Check input
         if self.method not in optimizers:
-            raise ValueError(f"Method '{self.method}' not supported. Choose from {list(optimizers.keys())}.")
+            raise ValueError(
+                f"Method '{self.method}' not supported. Choose from {list(optimizers.keys())}."
+            )
         # Define scipy optimizer instance based on user input
         optimizer = optimizers[self.method]
-        
-        # Remove "method" from params before passing, leaving the optimizer setup parameter for 
+
+        # Remove "method" from params before passing, leaving the optimizer setup parameter for
         # the scipy optimizer initiation
         params_to_use = {k: v for k, v in self.params.items() if k != "method"}
         self.results = optimizer(self.objective_func, self.bounds, **params_to_use)
-        
+
         return self.results
 
     def result_visualization(self):
@@ -87,16 +94,16 @@ class SciPyOptimizer:
         """
         if self.results is None:
             raise ValueError("Run optimize() first before visualizing results.")
-        
+
         # Generate grid for visualization
-        x = np.arange(self.bounds[0][0]-1, self.bounds[0][1]+1)
-        y = np.arange(self.bounds[1][0]-1, self.bounds[1][1]+1)
+        x = np.arange(self.bounds[0][0] - 1, self.bounds[0][1] + 1)
+        y = np.arange(self.bounds[1][0] - 1, self.bounds[1][1] + 1)
         xgrid, ygrid = np.meshgrid(x, y)
         xy = np.stack([xgrid, ygrid])
         z_grid = self.objective_func(xy)
 
         # Matplotlib style
-        plt.style.use('bmh')
+        plt.style.use("bmh")
         plt.rcParams.update({"axes.facecolor": "white", "axes.grid": True})
 
         # Create subplots
@@ -106,15 +113,30 @@ class SciPyOptimizer:
 
         # Surface plot
         ax1.plot_surface(xgrid, ygrid, z_grid, cmap="coolwarm")
-        
+
         # Contour plot
         ax2.contour(xgrid, ygrid, z_grid, cmap="coolwarm")
 
         # Scatter the optimization result
         best_x, best_y = self.results.x
         best_z = self.objective_func(self.results.x)
-        ax1.scatter(best_x, best_y, best_z, color="red", label=f"Best ({self.method})", marker='x', s=100)
-        ax2.scatter(best_x, best_y, color="red", label=f"Best ({self.method})", marker='x', s=100)
+        ax1.scatter(
+            best_x,
+            best_y,
+            best_z,
+            color="red",
+            label=f"Best ({self.method})",
+            marker="x",
+            s=100,
+        )
+        ax2.scatter(
+            best_x,
+            best_y,
+            color="red",
+            label=f"Best ({self.method})",
+            marker="x",
+            s=100,
+        )
 
         # Titles and labels
         ax1.set_title("Objective Function Surface")
@@ -130,6 +152,7 @@ class SciPyOptimizer:
         ax2.legend()
         plt.show()
 
+
 # Example Usage
 if __name__ == "__main__":
     #################################################################
@@ -138,8 +161,9 @@ if __name__ == "__main__":
     def first_example():
         # Define the objective function (Eggholder function)
         def eggholder(x):
-            return (-(x[1] + 47) * np.sin(np.sqrt(abs(x[0]/2 + (x[1] + 47))))
-                    - x[0] * np.sin(np.sqrt(abs(x[0] - (x[1] + 47)))))
+            return -(x[1] + 47) * np.sin(np.sqrt(abs(x[0] / 2 + (x[1] + 47)))) - x[
+                0
+            ] * np.sin(np.sqrt(abs(x[0] - (x[1] + 47))))
 
         # Define bounds
         bounds = [(-512, 512), (-512, 512)]
@@ -159,7 +183,7 @@ if __name__ == "__main__":
             "maxiter": 500,
             "popsize": 20,
             "mutation": (0.5, 1),
-            "recombination": 0.7
+            "recombination": 0.7,
         }
 
         optimizer = SciPyOptimizer(eggholder, bounds, params=de_params)
@@ -168,6 +192,7 @@ if __name__ == "__main__":
         print("Best solution (DE):", result.x)
         print("Minimum value (DE):", result.fun)
         optimizer.result_visualization()
+
     #################################################################
 
     #################################################################
@@ -186,7 +211,7 @@ if __name__ == "__main__":
             "method": "differential_evolution",
             "maxiter": 2000,
             "popsize": 20,
-            "tol": 0.01
+            "tol": 0.01,
         }
 
         # Run optimizer
