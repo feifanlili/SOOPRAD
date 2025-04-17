@@ -1,10 +1,14 @@
+# ++++++++++ LOCAL IMPORTS ++++++++++++++
+from optimizer import Optimizer
+
+# ++++++++++ PACKAGE IMPORTS ++++++++++++
 import random
 import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools
 
 
-class GA_Optimizer:
+class GA_Optimizer(Optimizer):
     DEFAULT_PARAMS = {
         "N_bits": 10,  # Number of bits for binary encoding
         "N_pop": 40,  # Population size
@@ -18,7 +22,7 @@ class GA_Optimizer:
 
     def __init__(self, objective_func, bounds, params=None):
         # Store the objective function and parameter bounds
-        super().__init__()
+        super().__init__(objective_func, bounds)
         self.num_variables = len(bounds)
 
         # Merge default parameters with user-defined ones
@@ -28,7 +32,7 @@ class GA_Optimizer:
         # Initialize DEAP framework
         self._setup_deap()
         # TODO: allow for user-defined definition of the operators:
-        self.assignOperator("mutation", param["mut_operator"])
+        # self.assignOperator("mutation", param["mut_operator"])
 
     def _setup_deap(self):
         """Initializes DEAP components (Individual, Population, Operators)."""
@@ -49,6 +53,7 @@ class GA_Optimizer:
         )
 
         self.toolbox.register("evaluate", self._evaluate)
+        # TODO: (to be discussed) make the following lines user-definable via params
         self.toolbox.register("mate", tools.cxTwoPoint)
         self.toolbox.register("mutate", tools.mutFlipBit, indpb=0.05)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
@@ -86,6 +91,7 @@ class GA_Optimizer:
         ##########################################################################
         ##########################################################################
         # Generate grid for visualization (only if plotting is enabled)
+        # TODO: move plotting out of the evolve functions
         if plot_results:
             x = np.arange(self.bounds[0][0] - 1, self.bounds[0][1] + 1)
             y = np.arange(self.bounds[1][0] - 1, self.bounds[1][1] + 1)
