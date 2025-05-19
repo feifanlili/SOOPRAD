@@ -29,27 +29,65 @@ class GA_Optimizer:
 
     def _setup_deap(self):
         """Initializes DEAP components (Individual, Population, Operators)."""
+        # The creator module in DEAP is a convenient metaclass-based utility that allows users to define custom classes (usually for individuals and fitness values) in a single line of code.
         creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
         creator.create("Individual", list, fitness=creator.FitnessMin)
 
         self.toolbox = base.Toolbox()
+        #########################################################################################
+        # Individual & Population Toolbox Registeration 
+        #########################################################################################
+        # The base.Toolbox().register(...) method in DEAP is a practical abstraction for defining reusable components (like individuals and populations) in evolutionary algorithms.
+
+        # tools.initRepeat(container, func, n) is a factory function that creates an object by: 
+        # 1. repeating a function (no-argument callable) call n times
+        # 2. collecting the results into a container
+        #########################################################################################
+        # ------------------------------------
+        # Step 1: Gene (a single binary value)
+        # ------------------------------------
+        # This wraps random.randint(0, 1) into a no-argument callable as required by initRepeat.
         self.toolbox.register("gene_generator", random.randint, 0, 1)
-        self.toolbox.register("individual", tools.initRepeat, creator.Individual, 
-                              self.toolbox.gene_generator, self.N_bits * self.num_variables)
-        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
+        # -------------------------------------------------------------------
+        # Step 2: Individual (a list of genes, wrapped in creator.Individual)
+        # -------------------------------------------------------------------
+        # Its total length is: (number of variables) × (number of bits per variable),
+        # so that each variable is encoded by N_bits binary digits.
+        # 
+        # Example:
+        # If num_variables = 3 (e.g., [thickness, length, material_param]) and N_bits = 3,
+        # the resulting individual might look like:
+        #   [1, 0, 1 | 1, 0, 0 | 0, 1, 1] — where each group encodes one variable.
+        self.toolbox.register("individual", tools.initRepeat,
+                            creator.Individual,
+                            self.toolbox.gene_generator,
+                            self.N_bits * self.num_variables)
+        # ------------------------------------------
+        # Step 3: Population (a list of individuals)
+        # ------------------------------------------
+        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual, self.N_pop)
 
         self.toolbox.register("evaluate", self._evaluate)
+        # TODO: available to be reset by the user.
         self.toolbox.register("mate", tools.cxTwoPoint)
         self.toolbox.register("mutate", tools.mutFlipBit, indpb=0.05)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
 
     def _binary_to_physical(self, binary_individual):
-        """Converts a binary individual to physical values based on bounds."""
+        """
+        Converts a binary individual to physical values based on bounds.
+
+        Return:
+            a list with the size of problem dimension.
+        """
         physical_values = []
         for i in range(self.num_variables):
+            # extract i_th N_bits binary number for the i_th dimensional variable
             binary_part = binary_individual[i * self.N_bits: (i + 1) * self.N_bits]
+            # transform it into decimal number
             decimal_value = int("".join(map(str, binary_part)), 2)
             var_min, var_max = self.bounds[i]
+            # based on the bounds, linear mapping the decimal value to the physical space
             physical_value = var_min + (decimal_value / (2**self.N_bits - 1)) * (var_max - var_min)
             physical_values.append(physical_value)
         return physical_values
@@ -61,12 +99,12 @@ class GA_Optimizer:
 
     def initialize_population(self):
         """Creates the initial population."""
-        self.pop = self.toolbox.population(n=self.N_pop)
+        self.pop = self.toolbox.population()
         fitnesses = list(map(self.toolbox.evaluate, self.pop))
         for ind, fit in zip(self.pop, fitnesses):
             ind.fitness.values = fit
 
-    def evolve(self, plot_results=True):
+    def optimize(self, plot_results=True):
         """Runs the genetic algorithm to optimize the objective function."""
         self.initialize_population()
         best_fitness = -float("inf")
@@ -205,4 +243,5 @@ if __name__ == "__main__":
 
     bounds = [(-512, 512), (-512, 512)]
     ga = GA_Optimizer(objective_func=eggholder, bounds=bounds)
-    ga.evolve()
+    ga.optimize()
+    # print(type(ga.toolbox.individual))
