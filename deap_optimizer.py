@@ -32,8 +32,8 @@ class GA_Optimizer:
         self._setup_deap()
 
         # Optimization history record
-        self.history_plot = []  # Holds data for later plotting
-        self.history_log = [] # Holds data for logging
+        self.history_plot = []  # Holds data for later plotting, recording physical
+        self.history_log = [] # Holds data for logging, recording 
 
 
     def _setup_deap(self):
@@ -46,27 +46,13 @@ class GA_Optimizer:
         #########################################################################################
         # Individual & Population Toolbox Registeration 
         #########################################################################################
-        # The base.Toolbox().register(...) method in DEAP is a practical abstraction for defining reusable components (like individuals and populations) in evolutionary algorithms.
-
-        # tools.initRepeat(container, func, n) is a factory function that creates an object by: 
-        # 1. repeating a function (no-argument callable) call n times
-        # 2. collecting the results into a container
-        #########################################################################################
         # ------------------------------------
         # Step 1: Gene (a single binary value)
         # ------------------------------------
-        # This wraps random.randint(0, 1) into a no-argument callable as required by initRepeat.
         self.toolbox.register("gene_generator", random.randint, 0, 1)
         # -------------------------------------------------------------------
         # Step 2: Individual (a list of genes, wrapped in creator.Individual)
         # -------------------------------------------------------------------
-        # Its total length is: (number of variables) × (number of bits per variable),
-        # so that each variable is encoded by N_bits binary digits.
-        # 
-        # Example:
-        # If num_variables = 3 (e.g., [thickness, length, material_param]) and N_bits = 3,
-        # the resulting individual might look like:
-        #   [1, 0, 1 | 1, 0, 0 | 0, 1, 1] — where each group encodes one variable.
         self.toolbox.register("individual", tools.initRepeat,
                             creator.Individual,
                             self.toolbox.gene_generator,
@@ -119,8 +105,11 @@ class GA_Optimizer:
         best_fitness = -float("inf")
         stagnation_count = 0
 
+        print("\n" + "#" * 80)
+        print("Starting Genetic Algorithm Optimization")
+        print("#" * 80)
+
         for g in range(self.maxiter):
-            print(f"-- Generation {g} --")
             # Get physical value of the population for the logging and pollting
             pop_phy = np.array([self._binary_to_physical(ind) for ind in self.pop])
             fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
@@ -134,9 +123,6 @@ class GA_Optimizer:
             ##########################################################################
             # 1 - Selection
             ##########################################################################
-            # Select individuals and create a deep copy, collecting them into a list to generate a new collection of the individuals.
-            # Why deep copy? the selection operator is not creating new objects, just references the existing one. 
-            # Using deep copy to create new instances
             # self.toolbox.clone() == deepcopy()
             offspring = list(map(self.toolbox.clone, self.toolbox.select(self.pop, len(self.pop))))
             ##########################################################################
@@ -171,14 +157,13 @@ class GA_Optimizer:
             # Track best and worst fitness
             fitness_values = [ind.fitness.values[0] for ind in self.pop]
             current_best = max(fitness_values)
-            print(f"  Best fitness: {current_best}, Worst fitness: {min(fitness_values)}")
-
+            # Store the log data
             log_data = {
                 "generation": g,
-                "best fitness": current_best, 
-                "worst fitness": min(fitness_values)
+                "best fitness": max(fitness_values), 
+                "worst fitness": min(fitness_values),
+                "average fitness": np.mean(fitness_values)
             } 
-
             self.history_log.append(log_data)
 
             # Check for convergence
@@ -189,25 +174,27 @@ class GA_Optimizer:
 
             if stagnation_count >= self.stagnation_limit or \
                abs(current_best - min(fitness_values)) < self.epsilon:
-                print(f"Stopping early at generation {g} due to stagnation or convergence.")
+                print(f"Early stopping at generation {g} (stagnation or convergence reached).")
                 break
 
             best_fitness = current_best
 
         best_ind = tools.selBest(self.pop, 1)[0]
         best_ind_phy = self._binary_to_physical(best_ind)
-        print(f"Best individual: {best_ind_phy}, Fitness: {best_ind.fitness.values}")
-        # print(self.history_plot)
+
+        print(f"Best individual (decoded): {best_ind_phy}")
+        print(f"Fitness: {best_ind.fitness.values[0]:.5f}")
+        print("#" * 80)
+        print("Optimization Complete")
+        print("#" * 80)
 
     def log(self):
         serializable_history = utility.make_json_serializable(self.history_log)
-
         with open("optimization_history.json", "w") as f:
             json.dump(serializable_history, f, indent=4)
 
 
     def replay_evolution(self, pause_time=0.3):
-
         x = np.arange(self.bounds[0][0]-1, self.bounds[0][1]+1)
         y = np.arange(self.bounds[1][0]-1, self.bounds[1][1]+1)
         xgrid, ygrid = np.meshgrid(x, y)
@@ -252,13 +239,25 @@ class GA_Optimizer:
 
         best_ind = tools.selBest(self.pop, 1)[0]
         best_ind_phy = self._binary_to_physical(best_ind)
-        print(f"Best individual: {best_ind_phy}, Fitness: {best_ind.fitness.values}")
+
+        ax1.clear()
+        ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm")  
+        ax1.set_title("Objective Function Surface")
+        ax1.set_xlabel("X")
+        ax1.set_ylabel("Y")
+        ax1.set_zlabel("Z")
+
+        ax2.clear()
+        ax2.contour(xgrid, ygrid, zgrid, cmap="coolwarm")  
+        ax2.set_title("Objective Function Contour")
+        ax2.set_xlabel("X")
+        ax2.set_ylabel("Y")
+
         ax1.scatter(best_ind_phy[0], best_ind_phy[1], best_ind.fitness.values[0], label='Best Individual')
         ax2.scatter(best_ind_phy[0], best_ind_phy[1], label='Best Individual', marker='x', color='r')
 
         ax1.legend()
         ax2.legend()
-
         plt.show()
 
 
@@ -273,9 +272,9 @@ if __name__ == "__main__":
     levy_func = ObjectiveFunction("levy")
     eggholder_func = ObjectiveFunction("eggholder")
 
-    # bounds = [(-512, 512), (-512, 512)]
-    bounds = [(-20, 20), (-20, 20)]
-    ga = GA_Optimizer(objective_func=ackley_func.f, bounds=bounds)
+    bounds = [(-512, 512), (-512, 512)]
+    # bounds = [(-20, 20), (-20, 20)]
+    ga = GA_Optimizer(objective_func=eggholder_func.f, bounds=bounds)
     ga.optimize()
     # ga.log()
-    ga.replay_evolution()
+    # ga.replay_evolution()
