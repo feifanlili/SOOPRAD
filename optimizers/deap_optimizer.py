@@ -2,7 +2,11 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools
-import pickle
+import json
+###########################################################################
+from utils import ObjectiveFunction
+from utils import utility
+# from test_2dfunctions import ObjectiveFunction
 
 class GA_Optimizer:
     DEFAULT_PARAMS = {
@@ -29,7 +33,8 @@ class GA_Optimizer:
         self._setup_deap()
 
         # Optimization history record
-        self.visualization_log = []  # Holds data for later plotting
+        self.history_plot = []  # Holds data for later plotting, recording physical
+        self.history_log = [] # Holds data for logging, recording 
 
 
     def _setup_deap(self):
@@ -42,27 +47,13 @@ class GA_Optimizer:
         #########################################################################################
         # Individual & Population Toolbox Registeration 
         #########################################################################################
-        # The base.Toolbox().register(...) method in DEAP is a practical abstraction for defining reusable components (like individuals and populations) in evolutionary algorithms.
-
-        # tools.initRepeat(container, func, n) is a factory function that creates an object by: 
-        # 1. repeating a function (no-argument callable) call n times
-        # 2. collecting the results into a container
-        #########################################################################################
         # ------------------------------------
         # Step 1: Gene (a single binary value)
         # ------------------------------------
-        # This wraps random.randint(0, 1) into a no-argument callable as required by initRepeat.
         self.toolbox.register("gene_generator", random.randint, 0, 1)
         # -------------------------------------------------------------------
         # Step 2: Individual (a list of genes, wrapped in creator.Individual)
         # -------------------------------------------------------------------
-        # Its total length is: (number of variables) × (number of bits per variable),
-        # so that each variable is encoded by N_bits binary digits.
-        # 
-        # Example:
-        # If num_variables = 3 (e.g., [thickness, length, material_param]) and N_bits = 3,
-        # the resulting individual might look like:
-        #   [1, 0, 1 | 1, 0, 0 | 0, 1, 1] — where each group encodes one variable.
         self.toolbox.register("individual", tools.initRepeat,
                             creator.Individual,
                             self.toolbox.gene_generator,
@@ -109,99 +100,72 @@ class GA_Optimizer:
         for ind, fit in zip(self.pop, fitnesses):
             ind.fitness.values = fit
 
-    def optimize(self, plot_results=True):
+    def optimize(self):
         """Runs the genetic algorithm to optimize the objective function."""
         self.initialize_population()
         best_fitness = -float("inf")
         stagnation_count = 0
-        ##########################################################################
-        ##########################################################################
-        # Generate grid for visualization (only if plotting is enabled)
-        if plot_results:
-            x = np.arange(self.bounds[0][0]-1, self.bounds[0][1]+1)
-            y = np.arange(self.bounds[1][0]-1, self.bounds[1][1]+1)
-            xgrid, ygrid = np.meshgrid(x, y)
-            xy = np.stack([xgrid, ygrid])
-            zgrid = self.objective_func(xy)
 
-            # Matplotlib style
-            plt.style.use('bmh')
-            plt.rcParams.update({"axes.facecolor": "white", "axes.grid": True})
-
-            # Create subplots
-            fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
-            ax1 = fig.add_subplot(1, 2, 1, projection="3d")
-            ax2 = fig.add_subplot(1, 2, 2)
-
-        # Surface plot
-        # ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm")
-        
-        # # Contour plot
-        # ax2.contour(xgrid, ygrid, zgrid, cmap="coolwarm")
-        ##########################################################################
-        ##########################################################################
+        print("\n" + "#" * 80)
+        print("Starting Genetic Algorithm Optimization")
+        print("#" * 80)
 
         for g in range(self.maxiter):
-            print(f"-- Generation {g} --")
+            # Get physical value of the population for the logging and pollting
+            pop_phy = np.array([self._binary_to_physical(ind) for ind in self.pop])
+            fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
+            # Inside the optimization loop, after evaluating and before next generation:
+            generation_data = {
+                "generation": g,
+                "individuals": pop_phy, 
+                "fitnesses": fitness_vals
+            }         
+            self.history_plot.append(generation_data)
             ##########################################################################
+            # 1 - Selection
             ##########################################################################
-            if plot_results:
-                ax1.clear()
-                ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm")  # Re-plot the objective function surface
-                ax1.set_title("Objective Function Surface")
-                ax1.set_xlabel("X")
-                ax1.set_ylabel("Y")
-                ax1.set_zlabel("Z")
-
-                ax2.clear()
-                ax2.contour(xgrid, ygrid, zgrid, cmap="coolwarm")  # Re-plot the contour of the objective function
-                ax2.set_title("Objective Function Contour")
-                ax2.set_xlabel("X")
-                ax2.set_ylabel("Y")
-
-                pop_phy = np.array([self._binary_to_physical(ind) for ind in self.pop])
-                # print(pop_phy)
-                x_vals = pop_phy[:, 0]  # First column
-                y_vals = pop_phy[:, 1]  # Second column
-                z_vals = np.array([ind.fitness.values[0] for ind in self.pop])
-                ax1.scatter(x_vals,y_vals,z_vals, label= "Generation %i" %g, s=100)
-                ax2.scatter(x_vals,y_vals, label= "Generation %i" %g, s=100)
-                ax1.legend()
-                ax2.legend()
-                
-                plt.pause(0.2)
-            # ax1.cla()
-            # ax2.cla()
-            ##########################################################################
-            ##########################################################################
-            # Selection and cloning
+            # self.toolbox.clone() == deepcopy()
             offspring = list(map(self.toolbox.clone, self.toolbox.select(self.pop, len(self.pop))))
-
-            # Crossover
+            ##########################################################################
+            # 2- Crossover (Recombination)
+            ##########################################################################
+            # mate individuals in order
             for child1, child2 in zip(offspring[::2], offspring[1::2]):
                 if random.random() < self.crossoverPB:
                     self.toolbox.mate(child1, child2)
-                    del child1.fitness.values, child2.fitness.values
-
-            # Mutation
+                    del child1.fitness.values, child2.fitness.values # if crossover happens, deleting the current fitness value, since the gene already changed
+            ##########################################################################
+            # 3 - Mutation
+            ##########################################################################
             for mutant in offspring:
                 if random.random() < self.mutationPB:
                     self.toolbox.mutate(mutant)
-                    del mutant.fitness.values
-
+                    del mutant.fitness.values # if mutation happens, deleting the current fitness value
+            ##########################################################################
+            # 4 - Evaluation
+            ##########################################################################
             # Evaluate new individuals
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid] # find the individuals without fitness value and re-evaluation
             fitnesses = map(self.toolbox.evaluate, invalid_ind)
             for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-
+                ind.fitness.values = fit # assign the new evaluation
+            ##########################################################################
+            # 5 - Update
+            ##########################################################################
             # Replace old population
             self.pop[:] = offspring
 
             # Track best and worst fitness
             fitness_values = [ind.fitness.values[0] for ind in self.pop]
             current_best = max(fitness_values)
-            print(f"  Best fitness: {current_best}, Worst fitness: {min(fitness_values)}")
+            # Store the log data
+            log_data = {
+                "generation": g,
+                "best fitness": max(fitness_values), 
+                "worst fitness": min(fitness_values),
+                "average fitness": np.mean(fitness_values)
+            } 
+            self.history_log.append(log_data)
 
             # Check for convergence
             if current_best <= best_fitness:
@@ -211,42 +175,107 @@ class GA_Optimizer:
 
             if stagnation_count >= self.stagnation_limit or \
                abs(current_best - min(fitness_values)) < self.epsilon:
-                print(f"Stopping early at generation {g} due to stagnation or convergence.")
+                print(f"Early stopping at generation {g} (stagnation or convergence reached).")
                 break
 
             best_fitness = current_best
 
         best_ind = tools.selBest(self.pop, 1)[0]
         best_ind_phy = self._binary_to_physical(best_ind)
-        print(f"Best individual: {best_ind_phy}, Fitness: {best_ind.fitness.values}")
 
-        if plot_results:
+        print(f"Best individual (decoded): {best_ind_phy}")
+        print(f"Fitness: {best_ind.fitness.values[0]:.5f}")
+        print("#" * 80)
+        print("Optimization Complete")
+        print("#" * 80)
+
+    def log(self):
+        serializable_history = utility.make_json_serializable(self.history_log)
+        with open("optimization_history.json", "w") as f:
+            json.dump(serializable_history, f, indent=4)
+
+
+    def replay_evolution(self, pause_time=0.3):
+        x = np.arange(self.bounds[0][0]-1, self.bounds[0][1]+1)
+        y = np.arange(self.bounds[1][0]-1, self.bounds[1][1]+1)
+        xgrid, ygrid = np.meshgrid(x, y)
+        xy = np.stack([xgrid, ygrid])
+        zgrid = self.objective_func(xy)
+
+        # Matplotlib style
+        plt.style.use('bmh')
+        plt.rcParams.update({"axes.facecolor": "white", "axes.grid": True})
+
+        # Create subplots
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
+        ax1 = fig.add_subplot(1, 2, 1, projection="3d")
+        ax2 = fig.add_subplot(1, 2, 2)
+
+        for gen_data in self.history_plot:
+            gen = gen_data["generation"]
+            pop_phy = gen_data["individuals"]
+            fitnesses = gen_data["fitnesses"]
+
+            x_vals = pop_phy[:, 0]  # First column
+            y_vals = pop_phy[:, 1]  # Second column
+            z_vals = np.array(fitnesses)
+
+            # Plot 3D surface
             ax1.clear()
-            ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm")  
-            ax1.set_title("Objective Function Surface")
-            ax1.set_xlabel("X")
-            ax1.set_ylabel("Y")
-            ax1.set_zlabel("Z")
-
-            ax2.clear()
-            ax2.contour(xgrid, ygrid, zgrid, cmap="coolwarm")  
-            ax2.set_title("Objective Function Contour")
-            ax2.set_xlabel("X")
-            ax2.set_ylabel("Y")
-
-            ax1.scatter(best_ind_phy[0], best_ind_phy[1], best_ind.fitness.values[0], label='Best Individual')
-            ax2.scatter(best_ind_phy[0], best_ind_phy[1], label='Best Individual', marker='x', color='r')
-
+            ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm", alpha=0.7)
+            ax1.scatter(x_vals, y_vals, z_vals, c="tab:red", s=50, label=f"Gen {gen}")
+            ax1.set_title("Surface")
+            ax1.set_xlabel("X"); ax1.set_ylabel("Y"); ax1.set_zlabel("Z")
             ax1.legend()
+
+            # Plot 2D contour
+            ax2.clear()
+            ax2.contour(xgrid, ygrid, zgrid, cmap="coolwarm")
+            ax2.scatter(x_vals, y_vals, c="tab:red", s=50, label=f"Gen {gen}")
+            ax2.set_title("Contour")
+            ax2.set_xlabel("X"); ax2.set_ylabel("Y")
             ax2.legend()
-            plt.show()
+
+            plt.pause(pause_time)
+
+        best_ind = tools.selBest(self.pop, 1)[0]
+        best_ind_phy = self._binary_to_physical(best_ind)
+
+        ax1.clear()
+        ax1.plot_surface(xgrid, ygrid, zgrid, cmap="coolwarm")  
+        ax1.set_title("Objective Function Surface")
+        ax1.set_xlabel("X")
+        ax1.set_ylabel("Y")
+        ax1.set_zlabel("Z")
+
+        ax2.clear()
+        ax2.contour(xgrid, ygrid, zgrid, cmap="coolwarm")  
+        ax2.set_title("Objective Function Contour")
+        ax2.set_xlabel("X")
+        ax2.set_ylabel("Y")
+
+        ax1.scatter(best_ind_phy[0], best_ind_phy[1], best_ind.fitness.values[0], label='Best Individual')
+        ax2.scatter(best_ind_phy[0], best_ind_phy[1], label='Best Individual', marker='x', color='r')
+
+        ax1.legend()
+        ax2.legend()
+        plt.show()
+
+
 
 # Example usage
 if __name__ == "__main__":
-    def eggholder(x):
-        return (-(x[1] + 47) * np.sin(np.sqrt(abs(x[0]/2 + (x[1] + 47))))) - x[0] * np.sin(np.sqrt(abs(x[0] - (x[1] + 47))))
+    sphere_func = ObjectiveFunction("sphere")
+    sine_squared_func = ObjectiveFunction("sine_squared")
+    absolute_sum_func = ObjectiveFunction("absolute_sum")
+    quadratic_func = ObjectiveFunction("quadratic")
+    ackley_func = ObjectiveFunction("ackley")
+    levy_func = ObjectiveFunction("levy")
+    eggholder_func = ObjectiveFunction("eggholder")
 
     bounds = [(-512, 512), (-512, 512)]
-    ga = GA_Optimizer(objective_func=eggholder, bounds=bounds)
+    # bounds = [(-20, 20), (-20, 20)]
+    ga = GA_Optimizer(objective_func=eggholder_func.f, bounds=bounds)
     ga.optimize()
-    # print(type(ga.toolbox.individual))
+    # ga.log()
+    # ga.replay_evolution()
