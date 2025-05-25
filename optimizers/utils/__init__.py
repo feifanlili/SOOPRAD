@@ -1,2 +1,0 @@
-from .test_2dfunctions import ObjectiveFunction
-from .formatting import make_json_serializable

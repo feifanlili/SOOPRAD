@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 from deap import base, creator, tools
 import json
 ###########################################################################
-from optimizers.utils.test_2dfunctions import ObjectiveFunction
 from optimizers.utils import formatting
 from optimizers.utils.logger import OptimizerLogger
+from optimizers.utils.benckmark_functions import ObjectiveFunction
 
 class GA_Optimizer:     
     """
@@ -226,18 +226,6 @@ class GA_Optimizer:
         if self.logger:
             self.logger.save()
 
-    def log(self):
-        """
-        Logs the optimization history to a JSON file named 'optimization_history.json'.
-
-        Converts internal history_log to a JSON-serializable format before saving.
-        Requires a utility function: utility.make_json_serializable()
-        """
-        serializable_history = formatting.make_json_serializable(self.history_log)
-        with open("optimization_history.json", "w") as f:
-            json.dump(serializable_history, f, indent=4)
-
-
     def replay_evolution(self, pause_time=0.3):
         """
         Replays the optimization process generation-by-generation using 2D and 3D plots.
@@ -314,17 +302,16 @@ class GA_Optimizer:
 
 # Example usage
 if __name__ == "__main__":
-    sphere_func = ObjectiveFunction("sphere")
-    sine_squared_func = ObjectiveFunction("sine_squared")
-    absolute_sum_func = ObjectiveFunction("absolute_sum")
-    quadratic_func = ObjectiveFunction("quadratic")
-    ackley_func = ObjectiveFunction("ackley")
-    levy_func = ObjectiveFunction("levy")
-    eggholder_func = ObjectiveFunction("eggholder")
+    # === 2D Objective Functions ===
+    sphere_func = ObjectiveFunction("sphere", dimension=2)
+    sine_squared_func = ObjectiveFunction("sine_squared", dimension=2)
+    absolute_sum_func = ObjectiveFunction("absolute_sum", dimension=2)
+    quadratic_func = ObjectiveFunction("quadratic", dimension=2)
+    ackley_func = ObjectiveFunction("ackley", dimension=2)
+    levy_func = ObjectiveFunction("levy", dimension=2)
+    eggholder_func = ObjectiveFunction("eggholder", dimension=2)
 
     bounds = [(-512, 512), (-512, 512)]
     # bounds = [(-20, 20), (-20, 20)]
     ga = GA_Optimizer(objective_func=eggholder_func.f, bounds=bounds)
     ga.optimize()
-    # ga.log()
-    # ga.replay_evolution()
