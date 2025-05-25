@@ -5,29 +5,22 @@ from .formatting import make_json_serializable
 
 class OptimizerLogger:
     """
-    A logging utility class for recording optimization progress across generations.
-    
-    Supports both:
-    - CSV output for lightweight, generation-level summary (best/worst/avg fitness).
-    - JSON output for full population history (phenotype and fitness only).
+    A logging utility for recording optimization progress.
 
-    Designed to be independent of encoding mechanisms (e.g., genotype/phenotype),
-    making it suitable for GA, ES, DE, PSO, etc.
+    Logs:
+    - Generation summary (best/worst/avg fitness) to CSV
+    - Population snapshot (phenotype + fitness) to JSON
+
+    Supports multiple optimizers (GA, ES, DE, etc.).
 
     Attributes:
-        log_dir (Path): Directory where log files will be saved.
-        run_id (str): Identifier for the current optimization run (used as filename prefix).
-        summary (List[Dict]): List of generation-level fitness summary records.
-        population_history (List[Dict]): List of full population snapshots per generation.
+        enable_summary (bool): Enable logging generation summaries.
+        enable_population (bool): Enable logging full population data.
     """
-    def __init__(self, log_dir="logs", run_id=None):
-        """
-        Initializes the logger with a given directory and optional run ID.
 
-        Args:
-            log_dir (str or Path): Directory path to save logs.
-            run_id (str): Optional identifier to differentiate multiple runs.
-        """
+    def __init__(self, log_dir="logs", run_id=None, enable_summary=True, enable_population=True):
+        self.enable_summary = enable_summary
+        self.enable_population = enable_population
         self.log_dir = Path(log_dir)
         self.run_id = run_id or "run"
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -36,14 +29,16 @@ class OptimizerLogger:
 
     def log_generation_summary(self, generation, best, worst, avg):
         """
-        Logs a summary of the generation-level fitness metrics.
+        Logs generation-level summary if enabled.
 
         Args:
             generation (int): Generation index.
-            best (float): Best fitness value in current generation.
-            worst (float): Worst fitness value in current generation.
-            avg (float): Average fitness value in current generation.
+            best (float): Best fitness.
+            worst (float): Worst fitness.
+            avg (float): Average fitness.
         """
+        if not self.enable_summary:
+            return
         self.summary.append({
             "generation": generation,
             "best_fitness": best,
@@ -53,13 +48,15 @@ class OptimizerLogger:
 
     def log_population(self, generation, individuals, fitnesses):
         """
-        Logs the full population state.
+        Logs population phenotypes and fitnesses if enabled.
 
         Args:
             generation (int): Generation index.
-            individuals (List[List[float]] or np.ndarray): Phenotypes of individuals.
-            fitnesses (List[float] or np.ndarray): Corresponding fitness values.
+            individuals (List[List[float]]): Phenotype representation.
+            fitnesses (List[float]): Fitness values.
         """
+        if not self.enable_population:
+            return
         self.population_history.append({
             "generation": generation,
             "individuals": [list(map(float, ind)) for ind in individuals],
@@ -68,15 +65,16 @@ class OptimizerLogger:
 
     def save(self):
         """
-        Saves all logged data to disk:
-        - summary as a CSV file
-        - population history as a JSON file
+        Saves summary (CSV) and population history (JSON) if available.
         """
-        with open(self.log_dir / f"{self.run_id}_summary.csv", "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=self.summary[0].keys())
-            writer.writeheader()
-            writer.writerows(self.summary)
+        if self.enable_summary and self.summary:
+            summary_file = self.log_dir / f"{self.run_id}_summary.csv"
+            with open(summary_file, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.summary[0].keys())
+                writer.writeheader()
+                writer.writerows(self.summary)
 
-        # Save population
-        with open(self.log_dir / f"{self.run_id}_population.json", "w") as f:
-            json.dump(make_json_serializable(self.population_history), f, indent=2)
+        if self.enable_population and self.population_history:
+            pop_file = self.log_dir / f"{self.run_id}_population.json"
+            with open(pop_file, "w") as f:
+                json.dump(make_json_serializable(self.population_history), f, indent=2)

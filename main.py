@@ -20,7 +20,7 @@ def main():
     # 2. Define bounds
     bounds_egg = [(-512, 512), (-512, 512)]
     # 3. Define optimizer parameters
-    optimizer = GA_Optimizer(objective_function, bounds_egg)
+    optimizer = GA_Optimizer(objective_function, bounds_egg, log_population=False,log_summary=True)
     # 4. Run optimization 
     result = optimizer.optimize()
 

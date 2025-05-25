@@ -11,12 +11,14 @@ from optimizers.utils.logger import OptimizerLogger
 class GA_Optimizer:     
     """
     A Genetic Algorithm optimizer using binary encoding, based on the DEAP framework.
-    
-    Attributes:
+
+    Args:
         objective_func (callable): The objective function to minimize.
-        bounds (list of tuples): Variable bounds as (min, max) pairs.
-        params (dict): Algorithm parameters.
-    """        
+        bounds (list of tuples): Variable bounds for each variable.
+        params (dict, optional): Custom parameters to override defaults.
+        log_population (bool, optional): If True, logs full population phenotype+fitness. Defaults to True.
+        log_summary (bool, optional): If True, logs generation-level best/worst/avg. Defaults to True.
+    """       
     DEFAULT_PARAMS = {
         "N_bits": 10,          # Number of bits for binary encoding
         "N_pop": 40,           # Population size
@@ -27,7 +29,7 @@ class GA_Optimizer:
         "epsilon": 1e-6        # Convergence threshold
     }
 
-    def __init__(self, objective_func, bounds, params=None):
+    def __init__(self, objective_func, bounds, params=None, log_population=True, log_summary=True):
         """
         Initializes the GA optimizer.
         
@@ -45,13 +47,14 @@ class GA_Optimizer:
         self.params = {**self.DEFAULT_PARAMS, **(params or {})}
         vars(self).update(self.params)
 
+        # Optional logger
+        if log_population or log_summary:
+            self.logger = OptimizerLogger(enable_population=log_population,enable_summary=log_summary)
+        else:
+            self.logger = None
+
         # Initialize DEAP framework
         self._setup_deap()
-
-        # Optimization history record
-        self.history_plot = []  # Holds data for later plotting, recording physical
-        self.history_log = [] # Holds data for logging, recording 
-        self.logger = OptimizerLogger()
 
 
     def _setup_deap(self):
@@ -152,7 +155,8 @@ class GA_Optimizer:
             # Get physical value of the population for the logging.
             pop_phy = np.array([self._binary_to_physical(ind) for ind in self.pop])
             fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
-            self.logger.log_population(g, pop_phy, fitness_vals)
+            if self.logger:
+                self.logger.log_population(g, pop_phy, fitness_vals)
             ##########################################################################
             # 1 - Selection
             ##########################################################################
@@ -190,11 +194,12 @@ class GA_Optimizer:
             # Track best and worst fitness
             fitness_values = [ind.fitness.values[0] for ind in self.pop]
             current_best = max(fitness_values)
-            self.logger.log_generation_summary(
-                generation=g,
-                best=current_best,
-                worst=min(fitness_values),
-                avg=np.mean(fitness_values))
+            if self.logger:
+                self.logger.log_generation_summary(
+                    generation=g,
+                    best=current_best,
+                    worst=min(fitness_values),
+                    avg=np.mean(fitness_values))
             
             # Check for convergence
             if current_best <= best_fitness:
@@ -218,7 +223,8 @@ class GA_Optimizer:
         print("Optimization Complete")
         print("#" * 80)
 
-        self.logger.save()
+        if self.logger:
+            self.logger.save()
 
     def log(self):
         """
