@@ -4,11 +4,19 @@ import matplotlib.pyplot as plt
 from deap import base, creator, tools
 import json
 ###########################################################################
-from utils import ObjectiveFunction
-from utils import utility
-# from test_2dfunctions import ObjectiveFunction
+from optimizers.utils.test_2dfunctions import ObjectiveFunction
+from optimizers.utils import formatting
+from optimizers.utils.logger import OptimizerLogger
 
-class GA_Optimizer:
+class GA_Optimizer:     
+    """
+    A Genetic Algorithm optimizer using binary encoding, based on the DEAP framework.
+    
+    Attributes:
+        objective_func (callable): The objective function to minimize.
+        bounds (list of tuples): Variable bounds as (min, max) pairs.
+        params (dict): Algorithm parameters.
+    """        
     DEFAULT_PARAMS = {
         "N_bits": 10,          # Number of bits for binary encoding
         "N_pop": 40,           # Population size
@@ -20,6 +28,14 @@ class GA_Optimizer:
     }
 
     def __init__(self, objective_func, bounds, params=None):
+        """
+        Initializes the GA optimizer.
+        
+        Args:
+            objective_func (callable): Objective function to be minimized.
+            bounds (list): List of (min, max) tuples for each variable.
+            params (dict, optional): Custom GA parameters to override defaults.
+        """
         # Store the objective function and parameter bounds
         self.objective_func = objective_func
         self.bounds = bounds
@@ -35,6 +51,7 @@ class GA_Optimizer:
         # Optimization history record
         self.history_plot = []  # Holds data for later plotting, recording physical
         self.history_log = [] # Holds data for logging, recording 
+        self.logger = OptimizerLogger()
 
 
     def _setup_deap(self):
@@ -71,10 +88,13 @@ class GA_Optimizer:
 
     def _binary_to_physical(self, binary_individual):
         """
-        Converts a binary individual to physical values based on bounds.
-
-        Return:
-            a list with the size of problem dimension.
+        Converts a binary individual into real-valued variables using linear mapping.
+        
+        Args:
+            binary_individual (list): Binary list representing encoded variables.
+        
+        Returns:
+            list: Real-valued representation of the individual.
         """
         physical_values = []
         for i in range(self.num_variables):
@@ -89,19 +109,37 @@ class GA_Optimizer:
         return physical_values
 
     def _evaluate(self, individual):
-        """Evaluation function for individuals."""
+        """
+        Evaluation wrapper that converts binary to physical values and evaluates the fitness.
+        
+        Args:
+            individual (list): Binary individual.
+        
+        Returns:
+            tuple: Fitness value (as a single-element tuple).
+        """
         x = self._binary_to_physical(individual)
         return self.objective_func(x),
 
     def initialize_population(self):
-        """Creates the initial population."""
+        """
+        Initializes the population and evaluates fitness values.
+        """
         self.pop = self.toolbox.population()
         fitnesses = list(map(self.toolbox.evaluate, self.pop))
         for ind, fit in zip(self.pop, fitnesses):
             ind.fitness.values = fit
 
     def optimize(self):
-        """Runs the genetic algorithm to optimize the objective function."""
+        """
+        Runs the genetic algorithm to optimize the objective function.
+
+        This function:
+            - Initializes the population
+            - Iteratively applies selection, crossover, mutation, and evaluation
+            - Tracks progress and logs the best solution
+            - Implements early stopping based on stagnation or convergence
+        """
         self.initialize_population()
         best_fitness = -float("inf")
         stagnation_count = 0
@@ -111,16 +149,10 @@ class GA_Optimizer:
         print("#" * 80)
 
         for g in range(self.maxiter):
-            # Get physical value of the population for the logging and pollting
+            # Get physical value of the population for the logging.
             pop_phy = np.array([self._binary_to_physical(ind) for ind in self.pop])
             fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
-            # Inside the optimization loop, after evaluating and before next generation:
-            generation_data = {
-                "generation": g,
-                "individuals": pop_phy, 
-                "fitnesses": fitness_vals
-            }         
-            self.history_plot.append(generation_data)
+            self.logger.log_population(g, pop_phy, fitness_vals)
             ##########################################################################
             # 1 - Selection
             ##########################################################################
@@ -158,15 +190,12 @@ class GA_Optimizer:
             # Track best and worst fitness
             fitness_values = [ind.fitness.values[0] for ind in self.pop]
             current_best = max(fitness_values)
-            # Store the log data
-            log_data = {
-                "generation": g,
-                "best fitness": max(fitness_values), 
-                "worst fitness": min(fitness_values),
-                "average fitness": np.mean(fitness_values)
-            } 
-            self.history_log.append(log_data)
-
+            self.logger.log_generation_summary(
+                generation=g,
+                best=current_best,
+                worst=min(fitness_values),
+                avg=np.mean(fitness_values))
+            
             # Check for convergence
             if current_best <= best_fitness:
                 stagnation_count += 1
@@ -189,13 +218,27 @@ class GA_Optimizer:
         print("Optimization Complete")
         print("#" * 80)
 
+        self.logger.save()
+
     def log(self):
-        serializable_history = utility.make_json_serializable(self.history_log)
+        """
+        Logs the optimization history to a JSON file named 'optimization_history.json'.
+
+        Converts internal history_log to a JSON-serializable format before saving.
+        Requires a utility function: utility.make_json_serializable()
+        """
+        serializable_history = formatting.make_json_serializable(self.history_log)
         with open("optimization_history.json", "w") as f:
             json.dump(serializable_history, f, indent=4)
 
 
     def replay_evolution(self, pause_time=0.3):
+        """
+        Replays the optimization process generation-by-generation using 2D and 3D plots.
+
+        Args:
+            pause_time (float): Pause between frames in seconds (default: 0.3)
+        """
         x = np.arange(self.bounds[0][0]-1, self.bounds[0][1]+1)
         y = np.arange(self.bounds[1][0]-1, self.bounds[1][1]+1)
         xgrid, ygrid = np.meshgrid(x, y)
