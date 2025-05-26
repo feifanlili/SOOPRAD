@@ -23,7 +23,7 @@ def main():
     step_1d_func = ObjectiveFunction("step_1d", dimension=1)
     noisy_quad_1d_func = ObjectiveFunction("noisy_quad_1d", dimension=1)
     ############################################################################
-    obj = sine_squared_func
+    obj = ackley_func
     ############################################################################
     # User Input: 
     ############################################################################
@@ -31,11 +31,16 @@ def main():
     objective_function = obj.f
     # 2. Define bounds
     bounds = obj.bounds
-    # 3. Define optimizer parameters
+    # 3. Define optimizer parameters (if not given the default setting will be used)
+    # 4. Create optimizer instance
     optimizer = GA_Optimizer(objective_function, bounds, log_population=True,log_summary=True)
-    # 4. Run optimization 
+    ############################################################################
+    # Execute
+    ############################################################################
     optimizer.optimize()
-
+    ############################################################################
+    # Post - Processing
+    ############################################################################
     # Create visualizer
     vis = OptimizerVisualizer(
         population_log_path="logs/run_population.json",
@@ -43,7 +48,7 @@ def main():
         bounds=bounds
     )
 
-    # # Run the animation
+    # Run the animation
     vis.replay(pause_time=0.1)
 
     

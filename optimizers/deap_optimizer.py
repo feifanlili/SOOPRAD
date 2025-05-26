@@ -2,6 +2,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools
+import inspect
 import json
 ###########################################################################
 from optimizers.utils import formatting
@@ -20,13 +21,20 @@ class GA_Optimizer:
         log_summary (bool, optional): If True, logs generation-level best/worst/avg. Defaults to True.
     """       
     DEFAULT_PARAMS = {
-        "N_bits": 10,          # Number of bits for binary encoding
-        "N_pop": 40,           # Population size
-        "maxiter": 1000,       # Max number of generations
-        "crossoverPB": 0.5,    # Crossover probability
-        "mutationPB": 0.2,     # Mutation probability
-        "stagnation_limit": 50,# Stop if no improvement for X generations
-        "epsilon": 1e-6        # Convergence threshold
+    "N_bits": 10,              # Number of bits for binary encoding
+    "N_pop": 40,               # Population size
+    "maxiter": 1000,           # Max number of generations
+    "crossoverPB": 0.5,        # Crossover probability
+    "mutationPB": 0.2,         # Mutation probability
+    "stagnation_limit": 50,    # Stop if no improvement for X generations
+    "epsilon": 1e-6,           # Convergence threshold
+
+    # Default DEAP operators (can be overridden by user)
+    "operators": {
+        "mate": ("cxTwoPoint", {}),
+        "mutate": ("mutFlipBit", {"indpb": 0.05}),
+        "select": ("selTournament", {"tournsize": 3}),
+    }
     }
 
     def __init__(self, objective_func, bounds, params=None, log_population=True, log_summary=True):
@@ -42,52 +50,114 @@ class GA_Optimizer:
         self.objective_func = objective_func
         self.bounds = bounds
         self.num_variables = len(bounds)
-
-        # Merge default parameters with user-defined ones
-        self.params = {**self.DEFAULT_PARAMS, **(params or {})}
-        vars(self).update(self.params)
-
-        # Optional logger
+        #########################################################################################
+        # Parameter Handling:
+        #########################################################################################
+        # 1. Ensure input params is a dict
+        params = params or {} 
+        # 2. Handle the core parameters
+        core_params = {**self.DEFAULT_PARAMS, **{k: v for k, v in params.items() if k != "operators"}}
+        self.params = core_params
+        vars(self).update(self.params) # Sets each param in self as an attribute for easy access
+        # 3. Handle the operator configuration
+        # Store operator config names and kwargs separately
+        self.operator_names = {}
+        self.operator_kwargs = {}
+        user_operator_config = params.get("operators", {})
+        operator_params = {**self.DEFAULT_PARAMS["operators"], **user_operator_config}
+        #########################################################################################
+        # Optional Logger Setup:
+        #########################################################################################
         if log_population or log_summary:
             self.logger = OptimizerLogger(enable_population=log_population,enable_summary=log_summary)
         else:
             self.logger = None
-
-        # Initialize DEAP framework
+        #########################################################################################
+        # Initialize DEAP Framework
+        #########################################################################################
         self._setup_deap()
+        self.set_operators(**operator_params)
 
 
     def _setup_deap(self):
         """Initializes DEAP components (Individual, Population, Operators)."""
-        # The creator module in DEAP is a convenient metaclass-based utility that allows users to define custom classes (usually for individuals and fitness values) in a single line of code.
-        creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-        creator.create("Individual", list, fitness=creator.FitnessMin)
+        # Safely create DEAP classes (avoid redefinition)
+        if not hasattr(creator, "FitnessMin"):
+            creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+        if not hasattr(creator, "Individual"):
+            creator.create("Individual", list, fitness=creator.FitnessMin)
 
         self.toolbox = base.Toolbox()
-        #########################################################################################
-        # Individual & Population Toolbox Registeration 
-        #########################################################################################
         # ------------------------------------
-        # Step 1: Gene (a single binary value)
+        # Gene: a single binary value (0 or 1)
         # ------------------------------------
         self.toolbox.register("gene_generator", random.randint, 0, 1)
-        # -------------------------------------------------------------------
-        # Step 2: Individual (a list of genes, wrapped in creator.Individual)
-        # -------------------------------------------------------------------
-        self.toolbox.register("individual", tools.initRepeat,
-                            creator.Individual,
-                            self.toolbox.gene_generator,
-                            self.N_bits * self.num_variables)
-        # ------------------------------------------
-        # Step 3: Population (a list of individuals)
-        # ------------------------------------------
+        # ---------------------------------------------
+        # Individual: list of genes wrapped in creator
+        # ---------------------------------------------
+        self.toolbox.register(
+            "individual", tools.initRepeat,
+            creator.Individual,
+            self.toolbox.gene_generator,
+            self.N_bits * self.num_variables
+        )
+        # -----------------------
+        # Population: list of individuals
+        # -----------------------
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual, self.N_pop)
-
+        # -----------------------
+        # Evaluation: pass-through to user's objective
+        # -----------------------
         self.toolbox.register("evaluate", self._evaluate)
-        # TODO: available to be reset by the user.
-        self.toolbox.register("mate", tools.cxTwoPoint)
-        self.toolbox.register("mutate", tools.mutFlipBit, indpb=0.05)
-        self.toolbox.register("select", tools.selTournament, tournsize=3)
+        # -------------------------------
+        # Operators (mate, mutate, select)
+        # -------------------------------
+        # Only registered later via self.set_operators()
+
+    def set_operators(self, mate=None, mutate=None, select=None):
+        """
+        Set genetic operators dynamically.
+
+        Args:
+            mate (tuple): (str, dict) e.g., ("cxUniform", {"indpb": 0.5})
+            mutate (tuple): (str, dict) e.g., ("mutFlipBit", {"indpb": 0.05})
+            select (tuple): (str, dict) e.g., ("selTournament", {"tournsize": 3})
+        """
+        op_config = {"mate": mate, "mutate": mutate, "select": select}
+
+        for op_name, config in op_config.items():
+            if config:
+                func_name, kwargs = config
+                deap_func = getattr(tools, func_name, None)
+                if deap_func is None:
+                    raise ValueError(f"Unknown DEAP function: {func_name}")
+                self.operator_names[op_name] = func_name
+                self.operator_kwargs[op_name] = kwargs
+                self.toolbox.register(op_name, deap_func, **kwargs)
+    
+    def list_available_operators(self, category=None):
+        """
+        Prints available DEAP operators in ('operator_name', {}) format.
+
+        Args:
+            category (str, optional): One of "select", "mate", "mutate". If None, shows all.
+        """
+
+        op_map = {
+            "select": "sel",
+            "mate": "cx",
+            "mutate": "mut"
+        }
+
+        valid_prefixes = (op_map[category],) if category else ("sel", "cx", "mut")
+
+        print(f"\nAvailable DEAP Operators (format: ('name', {{}})) for: {category or 'all'}")
+        print("-" * 60)
+
+        for name, func in sorted(vars(tools).items()):
+            if inspect.isfunction(func) and name.startswith(valid_prefixes):
+                print(f"('{name}', {{}})")
+
 
     def _binary_to_physical(self, binary_individual):
         """
