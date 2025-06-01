@@ -1,13 +1,10 @@
 import random
 import numpy as np
-import matplotlib.pyplot as plt
 from deap import base, creator, tools
 import inspect
-import json
 ###########################################################################
-from optimizers.utils import formatting
-from optimizers.utils.logger import OptimizerLogger
-from optimizers.utils.benckmark_functions import ObjectiveFunction
+from utils.logger import OptimizerLogger
+from utils.benckmark_functions import ObjectiveFunction
 
 class GA_Optimizer:     
     """
@@ -64,7 +61,7 @@ class GA_Optimizer:
         self.operator_names = {}
         self.operator_kwargs = {}
         user_operator_config = params.get("operators", {})
-        operator_params = {**self.DEFAULT_PARAMS["operators"], **user_operator_config}
+        self.operator_params = {**self.DEFAULT_PARAMS["operators"], **user_operator_config}
         #########################################################################################
         # Optional Logger Setup:
         #########################################################################################
@@ -76,7 +73,7 @@ class GA_Optimizer:
         # Initialize DEAP Framework
         #########################################################################################
         self._setup_deap()
-        self.set_operators(**operator_params)
+        self.set_operators(**self.operator_params)
 
 
     def _setup_deap(self):

@@ -34,22 +34,24 @@ def main():
     # 3. Define optimizer parameters (if not given the default setting will be used)
     # 4. Create optimizer instance
     optimizer = GA_Optimizer(objective_function, bounds, log_population=True,log_summary=True)
+    for op_name, config in optimizer.operator_params.items():
+        print(config)
     ############################################################################
     # Execute
     ############################################################################
-    optimizer.optimize()
-    ############################################################################
-    # Post - Processing
-    ############################################################################
-    # Create visualizer
-    vis = OptimizerVisualizer(
-        population_log_path="logs/run_population.json",
-        objective_func=objective_function,
-        bounds=bounds
-    )
+    # optimizer.optimize()
+    # ############################################################################
+    # # Post - Processing
+    # ############################################################################
+    # # Create visualizer
+    # vis = OptimizerVisualizer(
+    #     population_log_path="logs/run_population.json",
+    #     objective_func=objective_function,
+    #     bounds=bounds
+    # )
 
-    # Run the animation
-    vis.replay(pause_time=0.1)
+    # # Run the animation
+    # vis.replay(pause_time=0.1)
 
     
 if __name__ == "__main__":
