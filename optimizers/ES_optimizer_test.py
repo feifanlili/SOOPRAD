@@ -2,8 +2,10 @@ import random
 import numpy as np
 import array
 from deap import base, creator, tools, algorithms
+###########################################################################
+from .utils.logger import OptimizerLogger
+from .utils.benckmark_functions import ObjectiveFunction
 
-from optimizers.utils.benckmark_functions import ObjectiveFunction
 
 class ES_Optimizer():
     DEFAULT_PARAMS = {         # Number of genes per individual
@@ -14,7 +16,8 @@ class ES_Optimizer():
     "mutationPB": 0.3,          # Probability of applying mutation
     "MIN_STRATEGY": 0.001,      # Minimum strategy value for mutation strength
     "MAX_STRATEGY": 1.0,        # Maximum initial strategy value
-    "random_seed": None,        # Optionally fix random seed
+    "stagnation_limit": 50,    # Stop if no improvement for X generations
+    "epsilon": 1e-6,           # Convergence threshold
 
     # DEAP operators and parameters
     "operators": {
@@ -36,8 +39,13 @@ class ES_Optimizer():
         #################################################################
         params = params or {} 
         self.params = {**self.DEFAULT_PARAMS, **params}
-        # user_operator_config = params.get("operators", {})
-        # self.operator_params = {**self.DEFAULT_PARAMS["operators"], **user_operator_config}
+        #########################################################################################
+        # Optional Logger Setup:
+        #########################################################################################
+        if log_population or log_summary:
+            self.logger = OptimizerLogger(enable_population=log_population,enable_summary=log_summary)
+        else:
+            self.logger = None
 
         self._setup_deap()
 
@@ -73,7 +81,7 @@ class ES_Optimizer():
         # ---------------------------------
         # Population: list of individuals
         # ---------------------------------
-        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
+        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual, self.params['MU'])
         # -------------------------------
         # Operators (mate, mutate, select)
         # -------------------------------
@@ -92,29 +100,16 @@ class ES_Optimizer():
     def _evaluate(self,x):
         return self.objective_func(x),
 
+    def initialize_population(self):
+        # Initialize population
+        self.pop = self.toolbox.population()
 
-    def varOr(self, population, toolbox, lambda_, cxpb, mutpb):
-        assert ( + mutpb) <= 1.0, (
-            "The sum of the crossover and mutation probabilities must be smaller "
-            "or equal to 1.0.")
+        # Evaluate initial population
+        invalid_ind = [ind for ind in self.pop if not ind.fitness.valid]
+        fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
 
-        offspring = []
-        for _ in range(lambda_):
-            op_choice = random.random()
-            if op_choice < cxpb:            # Apply crossover
-                ind1, ind2 = [toolbox.clone(i) for i in random.sample(population, 2)]
-                ind1, ind2 = toolbox.mate(ind1, ind2)
-                del ind1.fitness.values
-                offspring.append(ind1)
-            elif op_choice < cxpb + mutpb:  # Apply mutation
-                ind = toolbox.clone(random.choice(population))
-                ind, = toolbox.mutate(ind)
-                del ind.fitness.values
-                offspring.append(ind)
-        else:                           # Apply reproduction
-            offspring.append(random.choice(population))
-
-        return offspring
 
     def optimize(self, strategy="plus", verbose=__debug__):
         """
@@ -131,48 +126,42 @@ class ES_Optimizer():
         assert strategy in ("plus", "comma"), "Strategy must be either 'plus' or 'comma'."
         assert self.params['LAMBDA'] >= self.params['MU'], \
             "LAMBDA must be greater than or equal to MU (according to lecture material, LAMBDA should be remarkably higher than MU)."
-
+        
+        # Parameter setup
         mu = self.params['MU']
         lambda_ = self.params['LAMBDA']
         cxpb = self.params['crossoverPB']
         mutpb = self.params['mutationPB']
         ngen = self.params['maxiter']
 
-        # Initialize population
-        self.pop = self.toolbox.population(n=mu)
+        best_fitness = -float("inf")
+        stagnation_count = 0
 
-        # Evaluate initial population
-        invalid_ind = [ind for ind in self.pop if not ind.fitness.valid]
-        fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
+        # Initialize Population
+        self.initialize_population()
 
         # Setup Hall of Fame
         self.hall_of_fame = tools.HallOfFame(1)
         self.hall_of_fame.update(self.pop)
 
-        # Setup statistics tracker
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
-        stats.register("min", np.min)
-        stats.register("max", np.max)
-
-        # Setup logbook
-        self.logbook = tools.Logbook()
-        self.logbook.header = ['gen', 'nevals'] + stats.fields
-
         # Record initial stats
-        record = stats.compile(self.pop)
-        self.logbook.record(gen=0, nevals=len(invalid_ind), **record)
+        record = self.logger.stats.compile(self.pop)
+        self.logger.logbook.record(gen=0, nevals=len(invalid_ind), **record)
         if verbose:
-            print(self.logbook.stream)
+            print(self.logger.logbook.stream)
 
-        # Begin evolution loop
+        print("\n" + "#" * 80)
+        print("Starting Genetic Algorithm Optimization")
+        print("#" * 80)
+
+        # Begin optimization loop
         for gen in range(1, ngen + 1):
-            # Generate offspring from current population
+            # Save the population data to the logger
+            fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
+            if self.logger:
+                self.logger.log_population(gen, self.pop, fitness_vals)
+            # Generate offspring from current population, applying mutate and mate to the population
             offspring = algorithms.varOr(self.pop, self.toolbox, lambda_, cxpb, mutpb)
-
             # Evaluate offspring
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
@@ -190,12 +179,10 @@ class ES_Optimizer():
                 self.pop[:] = self.toolbox.select(offspring, mu)
 
             # Record stats
-            record = stats.compile(self.pop)
-            self.logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+            record = self.logger.stats.compile(self.pop)
+            self.logger.logbook.record(gen=gen, nevals=len(invalid_ind), **record)
             if verbose:
-                print(self.logbook.stream)
+                print(self.logger.logbook.stream)
 
-
-sphere_func = ObjectiveFunction("sphere", dimension=2)
-optimizer = ES_Optimizer(sphere_func.f,sphere_func.bounds)
-
+        if self.logger:
+            self.logger.save()

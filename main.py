@@ -4,6 +4,7 @@ from optimizers.scipy_optimizer import SciPyOptimizer
 from optimizers.deap_optimizer import GA_Optimizer
 from optimizers.utils.benckmark_functions import ObjectiveFunction
 from optimizers.utils.visualizer import OptimizerVisualizer
+from optimizers.ES_optimizer_test import ES_Optimizer
 
 def main():
     # === 2D Objective Functions ===
@@ -23,7 +24,7 @@ def main():
     step_1d_func = ObjectiveFunction("step_1d", dimension=1)
     noisy_quad_1d_func = ObjectiveFunction("noisy_quad_1d", dimension=1)
     ############################################################################
-    obj = ackley_func
+    obj = levy_func
     ############################################################################
     # User Input: 
     ############################################################################
@@ -33,25 +34,25 @@ def main():
     bounds = obj.bounds
     # 3. Define optimizer parameters (if not given the default setting will be used)
     # 4. Create optimizer instance
-    optimizer = GA_Optimizer(objective_function, bounds, log_population=True,log_summary=True)
-    for op_name, config in optimizer.operator_params.items():
-        print(config)
+    optimizer = GA_Optimizer(objective_function, bounds,log_population=True,log_summary=True)
+    # for op_name, config in optimizer.params['operators'].items():
+    #     print(config)
     ############################################################################
     # Execute
     ############################################################################
-    # optimizer.optimize()
+    optimizer.optimize()
     # ############################################################################
     # # Post - Processing
     # ############################################################################
     # # Create visualizer
-    # vis = OptimizerVisualizer(
-    #     population_log_path="logs/run_population.json",
-    #     objective_func=objective_function,
-    #     bounds=bounds
-    # )
+    vis = OptimizerVisualizer(
+        population_log_path="logs/run_population.json",
+        objective_func=objective_function,
+        bounds=bounds
+    )
 
     # # Run the animation
-    # vis.replay(pause_time=0.1)
+    vis.replay(pause_time=0.2)
 
     
 if __name__ == "__main__":

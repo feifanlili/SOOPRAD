@@ -1,6 +1,9 @@
 import csv
+import numpy as np
 import json
 from pathlib import Path
+from deap import tools
+import pandas as pd
 from .formatting import make_json_serializable
 
 class OptimizerLogger:
@@ -24,7 +27,19 @@ class OptimizerLogger:
         self.log_dir = Path(log_dir)
         self.run_id = run_id or "run"
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.summary = []
+
+        # Setup statistics tracker
+        self.stats = tools.Statistics(lambda ind: ind.fitness.values)
+        self.stats.register("avg", np.mean)
+        self.stats.register("std", np.std)
+        self.stats.register("min", np.min)
+        self.stats.register("max", np.max)
+
+        # Setup logbook
+        self.logbook = tools.Logbook()
+        self.logbook.header = ['gen', 'nevals'] + self.stats.fields
+
+        # Reserve empty list for storing the data for plotting
         self.population_history = []
 
     def log_generation_summary(self, generation, best, worst, avg):
@@ -67,12 +82,11 @@ class OptimizerLogger:
         """
         Saves summary (CSV) and population history (JSON) if available.
         """
-        if self.enable_summary and self.summary:
-            summary_file = self.log_dir / f"{self.run_id}_summary.csv"
-            with open(summary_file, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=self.summary[0].keys())
-                writer.writeheader()
-                writer.writerows(self.summary)
+        if self.enable_summary:
+            # Convert logbook to a DataFrame
+            df = pd.DataFrame(self.logbook)
+            # Write to CSV
+            df.to_csv(self.log_dir / f"{self.run_id}_summary.csv", index=False)
 
         if self.enable_population and self.population_history:
             pop_file = self.log_dir / f"{self.run_id}_population.json"
