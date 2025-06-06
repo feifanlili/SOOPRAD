@@ -1,3 +1,16 @@
+"""
+main.py
+
+Main entry point for running optimization and visualizing its progress.
+
+This script:
+1. Selects an objective function
+2. Initializes an optimizer
+3. Runs the optimization
+4. Visualizes the population evolution
+
+Optimizers supported: DEAP (GA, ES), SciPy
+"""
 import numpy as np
 ############################################################################
 from optimizers.scipy_optimizer import SciPyOptimizer
@@ -7,6 +20,9 @@ from optimizers.utils.visualizer import OptimizerVisualizer
 from optimizers.deap_optimizer import ES_Optimizer
 
 def main():
+    # -------------------------------------------------------------------------
+    # Define Objective Functions (from benchmark)
+    # -------------------------------------------------------------------------
     # === 2D Objective Functions ===
     sphere_func = ObjectiveFunction("sphere", dimension=2)
     sine_squared_func = ObjectiveFunction("sine_squared", dimension=2)
@@ -23,40 +39,37 @@ def main():
     quadratic_1d_func = ObjectiveFunction("quadratic_1d", dimension=1)
     step_1d_func = ObjectiveFunction("step_1d", dimension=1)
     noisy_quad_1d_func = ObjectiveFunction("noisy_quad_1d", dimension=1)
-    ############################################################################
-    obj = quadratic_func
-    ############################################################################
-    # User Input: 
-    ############################################################################
-    # 1. Define objective function
-    objective_function = obj.f
-    # 2. Define bounds
-    bounds = obj.bounds
-    # 3. Define optimizer parameters (if not given the default setting will be used)
-    # 4. Create optimizer instance
-    optimizer = GA_Optimizer(objective_function, bounds,log_population=True,log_summary=True)
-    # for op_name, config in optimizer.params['operators'].items():
-    #     print(config)
-    ############################################################################
-    # Execute
-    ############################################################################
+    # -------------------------------------------------------------------------
+    # Select Objective Function
+    # -------------------------------------------------------------------------
+    selected_obj = quadratic_func
+    # -------------------------------------------------------------------------
+    # Extract core optimization components
+    # -------------------------------------------------------------------------
+    objective_function = selected_obj.f
+    bounds = selected_obj.bounds
+    # -------------------------------------------------------------------------
+    # Create Optimizer Instance
+    # -------------------------------------------------------------------------
+    optimizer = GA_Optimizer(
+        objective_function=objective_function,
+        bounds=bounds,
+        log_population=True,
+        log_summary=True
+    )
+    # -------------------------------------------------------------------------
+    # Run Optimization
+    # -------------------------------------------------------------------------
     optimizer.optimize()
-    ############################################################################
-    # Post - Processing
-    ############################################################################
-    # Create visualizer
-    vis = OptimizerVisualizer(
+    # -------------------------------------------------------------------------
+    # Post-Processing: Visualization
+    # -------------------------------------------------------------------------
+    visualizer = OptimizerVisualizer(
         population_log_path="logs/run_population.json",
         objective_func=objective_function,
         bounds=bounds
     )
-
-    # # # Run the animation
-    vis.replay(pause_time=0.2)
-    # optimizer.list_registered_operators()
-    # optimizer.list_registered_operators()
-    # optimizer.reset_select('selRoulette')
-    # optimizer.list_registered_operators()
+    visualizer.replay(pause_time=0.2)
 
     
 if __name__ == "__main__":

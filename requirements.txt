@@ -1,0 +1,5 @@
+numpy
+deap
+scipy
+pandas
+matplotlib

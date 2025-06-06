@@ -1,3 +1,20 @@
+"""
+utils/formatting.py
+
+Utility functions for JSON serialization of NumPy data structures.
+
+This module provides a helper function to recursively convert NumPy types
+(e.g., arrays, floats, ints) into native Python types (lists, float, int)
+that are compatible with JSON serialization.
+
+Typical use case:
+    - Preparing data for logging or saving model results to a JSON file
+      when the data includes NumPy arrays or scalars.
+
+Functions:
+    make_json_serializable(obj): Recursively transforms NumPy data into JSON-safe formats.
+"""
+
 import numpy as np
 
 def make_json_serializable(obj):

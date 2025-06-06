@@ -1,3 +1,24 @@
+"""
+utils/visualizer.py
+
+Module for visualizing the evolution of optimization populations over generations.
+
+Supports:
+- 1D objective functions (line plot + fitness scatter)
+- 2D objective functions (3D surface + 2D contour with population overlay)
+
+Useful for replaying population history stored in a JSON file.
+
+Dependencies:
+    - numpy
+    - matplotlib
+    - json
+    - pathlib
+
+Classes:
+    OptimizerVisualizer: Replays the optimization process over time.
+"""
+
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,14 +26,21 @@ from pathlib import Path
 
 class OptimizerVisualizer:
     """
-    Visualizer for plotting the evolution of populations over generations.
+    Visualizer for plotting the evolution of populations across generations.
 
-    Supports both 1D and 2D problems.
+    Supports real-time animated replays for both 1D and 2D optimization problems.
+
+    Attributes:
+        population_log_path (Path): Path to the population log file (JSON).
+        objective_func (callable): The objective function used during optimization.
+        bounds (List[Tuple[float, float]]): List of (min, max) bounds for each dimension.
+        history (List[dict]): Parsed population history across generations.
+        dim (int): Dimensionality of the optimization problem.
     """
 
     def __init__(self, population_log_path, objective_func, bounds):
         """
-        Initializes the visualizer.
+        Initializes the OptimizerVisualizer.
 
         Args:
             population_log_path (str or Path): Path to the JSON log of population history.
@@ -29,16 +57,21 @@ class OptimizerVisualizer:
         self.dim = len(first_individual)
 
     def _load_log(self):
-        """Load and parse JSON log of population history."""
+        """
+        Loads and parses the population history log from JSON.
+
+        Returns:
+            List[dict]: Parsed population data for each generation.
+        """
         with open(self.population_log_path, "r") as f:
             return json.load(f)
 
     def replay(self, pause_time=0.3):
         """
-        Replay the evolution process as an animation.
+        Replays the evolutionary process as a matplotlib animation.
 
         Args:
-            pause_time (float): Pause duration between frames (in seconds).
+            pause_time (float): Time (in seconds) to pause between frames.
         """
         plt.style.use('bmh')
         plt.rcParams.update({"axes.facecolor": "white", "axes.grid": True})
@@ -51,6 +84,12 @@ class OptimizerVisualizer:
             raise NotImplementedError("Only 1D and 2D visualizations are supported.")
 
     def _replay_1d(self, pause_time):
+        """
+        Internal method to animate 1D optimization evolution.
+
+        Args:
+            pause_time (float): Time (in seconds) to pause between frames.
+        """
         x = np.linspace(*self.bounds[0], 500)
         y = np.array([self.objective_func([xi]) for xi in x])
 
@@ -77,6 +116,12 @@ class OptimizerVisualizer:
         plt.show()
 
     def _replay_2d(self, pause_time):
+        """
+        Internal method to animate 2D optimization evolution.
+
+        Args:
+            pause_time (float): Time (in seconds) to pause between frames.
+        """
         x = np.linspace(*self.bounds[0], 100)
         y = np.linspace(*self.bounds[1], 100)
         xgrid, ygrid = np.meshgrid(x, y)

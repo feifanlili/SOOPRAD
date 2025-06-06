@@ -1,4 +1,26 @@
-import csv
+"""
+utils/logger.py
+
+Logging utility for evolutionary optimization processes.
+
+This module provides the OptimizerLogger class, which enables detailed tracking and recording of optimization runs across various algorithms (GA, ES, DE, etc.).
+The logger can output both:
+    - Per-generation statistical summaries (e.g., best, worst, average fitness)
+    - Full population snapshots with individual phenotypes and fitnesses (for the purpose of visualization of 1D/2D problem)
+
+Logs can be saved in CSV and JSON formats, suitable for further analysis or visualization.
+
+Dependencies:
+    - numpy
+    - pandas
+    - DEAP
+    - pathlib
+    - json
+
+Classes:
+    OptimizerLogger: Main logger for tracking evolutionary optimizer progress.
+"""
+
 import numpy as np
 import json
 from pathlib import Path
@@ -10,18 +32,32 @@ class OptimizerLogger:
     """
     A logging utility for recording optimization progress.
 
-    Logs:
-    - Generation summary (best/worst/avg fitness) to CSV
-    - Population snapshot (phenotype + fitness) to JSON
+    Supports logging both generation summaries and full population data.
 
-    Supports multiple optimizers (GA, ES, DE, etc.).
+    Logs:
+        - Generation statistics (best/worst/avg/std fitness) as CSV
+        - Population snapshots (phenotypes + fitnesses) as JSON
 
     Attributes:
-        enable_summary (bool): Enable logging generation summaries.
-        enable_population (bool): Enable logging full population data.
+        enable_summary (bool): Enable logging generation statistics.
+        enable_population (bool): Enable logging detailed population data.
+        log_dir (Path): Directory where logs are saved.
+        run_id (str): Identifier for current run, used in filenames.
+        stats (deap.tools.Statistics): DEAP statistics object for tracking fitness metrics.
+        logbook (deap.tools.Logbook): DEAP logbook for storing summary records.
+        population_history (list): Stored list of population data per generation.
     """
 
     def __init__(self, log_dir="logs", run_id=None, enable_summary=True, enable_population=True):
+        """
+        Initializes the OptimizerLogger.
+
+        Args:
+            log_dir (str): Path to the directory where logs will be saved.
+            run_id (str, optional): Unique ID for the run (used as filename prefix).
+            enable_summary (bool): If True, logs generation-level fitness stats.
+            enable_population (bool): If True, logs full population data each generation.
+        """
         self.enable_summary = enable_summary
         self.enable_population = enable_population
         self.log_dir = Path(log_dir)
@@ -42,33 +78,14 @@ class OptimizerLogger:
         # Reserve empty list for storing the data for plotting
         self.population_history = []
 
-    def log_generation_summary(self, generation, best, worst, avg):
-        """
-        Logs generation-level summary if enabled.
-
-        Args:
-            generation (int): Generation index.
-            best (float): Best fitness.
-            worst (float): Worst fitness.
-            avg (float): Average fitness.
-        """
-        if not self.enable_summary:
-            return
-        self.summary.append({
-            "generation": generation,
-            "best_fitness": best,
-            "worst_fitness": worst,
-            "avg_fitness": avg,
-        })
-
     def log_population(self, generation, individuals, fitnesses):
         """
-        Logs population phenotypes and fitnesses if enabled.
+        Logs population snapshot for the current generation.
 
         Args:
-            generation (int): Generation index.
-            individuals (List[List[float]]): Phenotype representation.
-            fitnesses (List[float]): Fitness values.
+            generation (int): Generation number.
+            individuals (List[List[float]]): Phenotypic representation of individuals.
+            fitnesses (List[float]): Corresponding fitness values.
         """
         if not self.enable_population:
             return
@@ -80,7 +97,11 @@ class OptimizerLogger:
 
     def save(self):
         """
-        Saves summary (CSV) and population history (JSON) if available.
+        Saves logs to disk.
+
+        Outputs:
+            - summary CSV file: <log_dir>/<run_id>_summary.csv
+            - population JSON file: <log_dir>/<run_id>_population.json
         """
         if self.enable_summary:
             # Convert logbook to a DataFrame
