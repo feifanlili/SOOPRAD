@@ -4,7 +4,7 @@ from optimizers.scipy_optimizer import SciPyOptimizer
 from optimizers.deap_optimizer import GA_Optimizer
 from optimizers.utils.benckmark_functions import ObjectiveFunction
 from optimizers.utils.visualizer import OptimizerVisualizer
-from optimizers.ES_optimizer_test import ES_Optimizer
+from optimizers.deap_optimizer import ES_Optimizer
 
 def main():
     # === 2D Objective Functions ===
@@ -24,7 +24,7 @@ def main():
     step_1d_func = ObjectiveFunction("step_1d", dimension=1)
     noisy_quad_1d_func = ObjectiveFunction("noisy_quad_1d", dimension=1)
     ############################################################################
-    obj = levy_func
+    obj = eggholder_func
     ############################################################################
     # User Input: 
     ############################################################################
@@ -34,13 +34,13 @@ def main():
     bounds = obj.bounds
     # 3. Define optimizer parameters (if not given the default setting will be used)
     # 4. Create optimizer instance
-    optimizer = GA_Optimizer(objective_function, bounds,log_population=True,log_summary=True)
+    optimizer = ES_Optimizer(objective_function, bounds,log_population=True,log_summary=True)
     # for op_name, config in optimizer.params['operators'].items():
     #     print(config)
     ############################################################################
     # Execute
     ############################################################################
-    optimizer.optimize()
+    optimizer.optimize(strategy="comma")
     # ############################################################################
     # # Post - Processing
     # ############################################################################

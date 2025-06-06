@@ -184,7 +184,7 @@ class GA_Optimizer(DeapOptimizer):
         print("Starting Genetic Algorithm Optimization")
         print("#" * 80)
 
-        for g in range(ngen):
+        for g in range(1, ngen + 1):
             # Get physical value of the population for the logging.
             pop_phy = np.array([self._binary_to_physical(ind) for ind in self.pop])
             fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
@@ -246,7 +246,7 @@ class GA_Optimizer(DeapOptimizer):
 class ES_Optimizer(DeapOptimizer):
     DEFAULT_PARAMS = {         # Number of genes per individual
     "MU": 10,                # MU: Number of parents (survivors)
-    "LAMBDA": 100,         # LAMBDA: Number of offspring per generation
+    "LAMBDA": 500,         # LAMBDA: Number of offspring per generation
     "maxiter": 500,             # Number of generations (ngen)
     "crossoverPB": 0.6,         # Probability of applying crossover
     "mutationPB": 0.3,          # Probability of applying mutation
@@ -276,7 +276,6 @@ class ES_Optimizer(DeapOptimizer):
             creator.create("Individual", array.array, typecode="d", fitness=creator.FitnessMin, strategy=None)
         if not hasattr(creator, "Strategy"):
             creator.create("Strategy", array.array, typecode="d")
-            
         # Individual generator
         def generateES(icls, scls, size, bounds, smin, smax):
             ind = icls(random.uniform(lower, upper) for lower, upper in bounds)
@@ -289,7 +288,7 @@ class ES_Optimizer(DeapOptimizer):
         # ---------------------------------
         # Population: list of individuals
         # ---------------------------------
-        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
+        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual, self.params['MU'])
     
     def _register_operators(self):
         for name, (op_name, kwargs) in self.params['operators'].items():
@@ -314,3 +313,99 @@ class ES_Optimizer(DeapOptimizer):
 
     def _evaluate(self, individual):
         return super()._evaluate(individual)
+
+    def initialize_population(self):
+        """
+        Initializes the population and evaluates fitness values.
+        """
+        self.pop = self.toolbox.population()
+        fitnesses = list(map(self.toolbox.evaluate, self.pop))
+        for ind, fit in zip(self.pop, fitnesses):
+            ind.fitness.values = fit
+
+    def optimize(self, strategy="plus"):
+        assert strategy in ("plus", "comma"), "Strategy must be either 'plus' or 'comma'."
+        assert self.params['LAMBDA'] >= self.params['MU'], \
+            "LAMBDA must be greater than or equal to MU (according to lecture material, LAMBDA should be remarkably higher than MU)."
+        
+        # Parameter setup
+        mu = self.params['MU']
+        lambda_ = self.params['LAMBDA']
+        cxpb = self.params['crossoverPB']
+        mutpb = self.params['mutationPB']
+        ngen = self.params['maxiter']
+
+        # Initialize population, best fitness (for convergence check), and stagnation count
+        self.initialize_population()
+        best_fitness = -float("inf")
+        stagnation_count = 0
+
+        # Setup Hall of Fame
+        self.hall_of_fame = tools.HallOfFame(1)
+        self.hall_of_fame.update(self.pop)
+        
+        print("\n" + "#" * 80)
+        print("Starting Evolution Strategy Optimization")
+        print("#" * 80)
+
+        # Begin optimization loop
+        for g in range(1, ngen + 1):
+            # Save the population data to the logger
+            fitness_vals = np.array([ind.fitness.values[0] for ind in self.pop])
+            if self.logger:
+                self.logger.log_population(g, self.pop, fitness_vals)
+            # -----------------------------------
+            # 1. Recombination & Mutation
+            # -----------------------------------
+            # Generate offspring from current population, applying mutate and mate to the population
+            offspring = algorithms.varOr(self.pop, self.toolbox, lambda_, cxpb, mutpb)
+            # -----------------------------------
+            # 2. Evaluation
+            # -----------------------------------
+            # Evaluate offspring
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+            # -----------------------------------
+            # 3. Selection
+            # -----------------------------------
+            # Survivor selection: either (μ + λ) or (μ, λ)
+            if strategy == "plus":
+                self.pop[:] = self.toolbox.select(self.pop + offspring, mu)
+            else:  # comma
+                self.pop[:] = self.toolbox.select(offspring, mu)
+            # Record stats
+            record = self.logger.stats.compile(self.pop)
+            self.logger.logbook.record(gen=g, nevals=len(invalid_ind), **record)
+            # Update Hall of Fame
+            if self.hall_of_fame is not None:
+                self.hall_of_fame.update(self.pop)
+            # Track best and worst fitness
+            fitness_values = [ind.fitness.values[0] for ind in self.pop]
+            current_best = max(fitness_values)
+            current_worst = min(fitness_values)
+            # Check for convergence
+            if current_best <= best_fitness:
+                stagnation_count += 1
+            else:
+                stagnation_count = 0
+            if stagnation_count >= self.params['stagnation_limit'] or \
+               abs(current_best - current_worst) < self.params['epsilon']:
+                print(f"Early stopping at generation {g} (stagnation or convergence reached).")
+                break
+
+            best_fitness = current_best
+        
+        best_individual = self.hall_of_fame[0]
+        best_individual_phy = self.hall_of_fame[0].fitness.values[0]
+
+        print(f"Best individual (decoded): {best_individual_phy}")
+        print(f"Fitness: {best_individual.fitness.values[0]:.5f}")
+        print("#" * 80)
+        print("Optimization Complete")
+        print("#" * 80)
+
+        if self.logger:
+            self.logger.save()
+            
