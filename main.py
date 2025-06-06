@@ -52,18 +52,20 @@ def main():
     # Create Optimizer Instance
     # -------------------------------------------------------------------------
     optimizer = GA_Optimizer(
-        objective_function=objective_function,
+        objective_function,
         bounds=bounds,
         log_population=True,
         log_summary=True
     )
+    # optimizer.list_registered_operators()
+    # optimizer.reset_mate('cxOnePoint')
     # -------------------------------------------------------------------------
     # Run Optimization
     # -------------------------------------------------------------------------
     optimizer.optimize()
-    # -------------------------------------------------------------------------
-    # Post-Processing: Visualization
-    # -------------------------------------------------------------------------
+    # # -------------------------------------------------------------------------
+    # # Post-Processing: Visualization
+    # # -------------------------------------------------------------------------
     visualizer = OptimizerVisualizer(
         population_log_path="logs/run_population.json",
         objective_func=objective_function,
