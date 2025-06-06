@@ -24,7 +24,7 @@ def main():
     step_1d_func = ObjectiveFunction("step_1d", dimension=1)
     noisy_quad_1d_func = ObjectiveFunction("noisy_quad_1d", dimension=1)
     ############################################################################
-    obj = eggholder_func
+    obj = quadratic_func
     ############################################################################
     # User Input: 
     ############################################################################
@@ -34,25 +34,29 @@ def main():
     bounds = obj.bounds
     # 3. Define optimizer parameters (if not given the default setting will be used)
     # 4. Create optimizer instance
-    optimizer = ES_Optimizer(objective_function, bounds,log_population=True,log_summary=True)
+    optimizer = GA_Optimizer(objective_function, bounds,log_population=True,log_summary=True)
     # for op_name, config in optimizer.params['operators'].items():
     #     print(config)
     ############################################################################
     # Execute
     ############################################################################
-    optimizer.optimize(strategy="comma")
-    # ############################################################################
-    # # Post - Processing
-    # ############################################################################
-    # # Create visualizer
+    optimizer.optimize()
+    ############################################################################
+    # Post - Processing
+    ############################################################################
+    # Create visualizer
     vis = OptimizerVisualizer(
         population_log_path="logs/run_population.json",
         objective_func=objective_function,
         bounds=bounds
     )
 
-    # # Run the animation
+    # # # Run the animation
     vis.replay(pause_time=0.2)
+    # optimizer.list_registered_operators()
+    # optimizer.list_registered_operators()
+    # optimizer.reset_select('selRoulette')
+    # optimizer.list_registered_operators()
 
     
 if __name__ == "__main__":

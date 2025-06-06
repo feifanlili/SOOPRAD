@@ -6,7 +6,6 @@ import inspect
 from abc import ABC, abstractmethod
 ###########################################################################
 from .utils.logger import OptimizerLogger
-from .utils.benckmark_functions import ObjectiveFunction
 
 class DeapOptimizer(ABC):
     def __init__(self, objective_func, bounds, default_params, params=None, log_population=True, log_summary=True):
@@ -71,6 +70,75 @@ class DeapOptimizer(ABC):
     def optimize(self):
         pass
     
+    ##################################################################################
+    # Operators Customization
+    ##################################################################################
+    def list_registered_operators(self):
+        print("\n" + "=" * 40)
+        print(" Current DEAP Operator Configuration")
+        print("=" * 40)
+
+        for op in ['select', 'mate', 'mutate']:
+            if op in self.params['operators']:
+                func_name, kwargs = self.params['operators'][op]
+                print(f"{op.capitalize()} Operator:")
+                print(f"  Function: {func_name}  (from deap.tools)")
+                print("  Parameters:")
+                if kwargs:
+                    for k, v in kwargs.items():
+                        print(f"    {k} = {v}")
+                else:
+                    print("    (no parameters)")
+            else:
+                print(f"{op.capitalize()} Operator: Not configured")
+
+        print("=" * 40 + "\n")
+
+    def reset_select(self, func_name, **kwargs):
+        """
+        Resets the selection operator with a new one from `deap.tools`.
+
+        Args:
+            func_name (str): Name of the DEAP selection operator (e.g., 'selTournament').
+            kwargs: Parameters to pass to the selection function.
+        """
+        if hasattr(tools, func_name):
+            self.toolbox.unregister("select")
+            self.toolbox.register("select", getattr(tools, func_name), **kwargs)
+            self.params['operators']['select'] = (func_name, kwargs)
+        else:
+            raise ValueError(f"Selection function '{func_name}' not found in deap.tools")
+
+    def reset_mate(self, func_name, **kwargs):
+        """
+        Resets the mating operator.
+
+        Args:
+            func_name (str): Name of the DEAP crossover operator (e.g., 'cxTwoPoint').
+            kwargs: Parameters for the crossover function.
+        """
+        if hasattr(tools, func_name):
+            self.toolbox.unregister("mate")
+            self.toolbox.register("mate", getattr(tools, func_name), **kwargs)
+            self.params['operators']['mate'] = (func_name, kwargs)
+        else:
+            raise ValueError(f"Mate function '{func_name}' not found in deap.tools")
+
+    def reset_mutate(self, func_name, **kwargs):
+        """
+        Resets the mutation operator.
+
+        Args:
+            func_name (str): Name of the DEAP mutation operator (e.g., 'mutFlipBit').
+            kwargs: Parameters for the mutation function.
+        """
+        if hasattr(tools, func_name):
+            self.toolbox.unregister("mutate")
+            self.toolbox.register("mutate", getattr(tools, func_name), **kwargs)
+            self.params['operators']['mutate'] = (func_name, kwargs)
+        else:
+            raise ValueError(f"Mutation function '{func_name}' not found in deap.tools")
+
 
 class GA_Optimizer(DeapOptimizer):
     DEFAULT_PARAMS = {
@@ -408,4 +476,3 @@ class ES_Optimizer(DeapOptimizer):
 
         if self.logger:
             self.logger.save()
-            
